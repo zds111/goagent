@@ -161,7 +161,7 @@ class MultiplexConnection(object):
                     hostslist[:i], hostslist[i:] = hostslist[i:], hostslist[:i]
                 break
             else:
-                logging.warning('MultiplexConnection Cannot hosts')
+                logging.warning('MultiplexConnection Cannot hosts %r:%r', hosts, port)
         else:
             raise RuntimeError(r'MultiplexConnection Cannot Connect to hostslist %s:%s' % (hostslist, port))
     def close(self):
@@ -191,7 +191,7 @@ def socket_create_connection(address, timeout=10, source_address=None):
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, True)
             return sock
         except socket.error, msg:
-            logging.error('socket_create_connection connect fail: (%r, %r)', hosts, port)
+            logging.error('socket_create_connection connect fail: (%r, %r)', hostslist, port)
             conn.close()
             sock = None
         if not sock:
