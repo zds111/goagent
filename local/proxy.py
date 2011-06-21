@@ -145,7 +145,7 @@ class MultiplexConnection(object):
             logging.debug('MultiplexConnection connect (%s, %s)', hosts, port)
             socs = []
             for host in hosts:
-                sock_family = socket.AF_INET if '.' in host else socket.AF_INET6
+                sock_family = socket.AF_INET6 if ':' in host else socket.AF_INET
                 sock = socket.socket(sock_family, socket.SOCK_STREAM)
                 sock.setblocking(0)
                 logging.debug('MultiplexConnection connect_ex (%r, %r)', host, port)
