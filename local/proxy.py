@@ -192,7 +192,6 @@ def socket_create_connection(address, timeout=10, source_address=None):
             return sock
         except socket.error, msg:
             logging.error('socket_create_connection connect fail: (%r, %r)', hostslist, port)
-            conn.close()
             sock = None
         if not sock:
             raise socket.error, msg
