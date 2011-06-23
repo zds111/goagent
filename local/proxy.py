@@ -11,6 +11,7 @@ import errno, zlib, struct, binascii
 import logging
 import httplib, urllib2, urlparse, socket, select
 import BaseHTTPServer, SocketServer
+import random
 import ConfigParser
 import ssl
 import ctypes
@@ -19,25 +20,6 @@ try:
     import OpenSSL
 except ImportError:
     OpenSSL = None
-
-def random_choice(seq):
-    return seq[int(ord(os.urandom(1))/256.0*len(seq))]
-
-def random_shuffle(seq):
-    from os import urandom
-    for i in xrange(len(seq)-1, 1, -1):
-        j = int(ord(urandom(1))/256.0 * (i+1))
-        seq[i], seq[j] = seq[j], seq[i]
-
-def random_sample(seq, n):
-    if len(seq) <= n:
-        return seq
-    from os import urandom
-    seq = seq[:]
-    for i in xrange(len(seq)-1, len(seq)-n-1, -1):
-        j = int(ord(urandom(1))/256.0 * (i+1))
-        seq[i], seq[j] = seq[j], seq[i]
-    return seq[-n:]
 
 class Common(object):
     '''global config module, based on GappProxy 2.0.0'''
@@ -83,7 +65,7 @@ class Common(object):
             return self.GAE_APPIDS[0]
         if self.GAE_BINDHOSTS:
             appid = self.GAE_BINDHOSTS.get(urlparse.urlsplit(url)[1])
-        appid = appid or random_choice(self.GAE_APPIDS)
+        appid = appid or random.choice(self.GAE_APPIDS)
         return appid
 
     def resolve_host(self, host):
@@ -128,7 +110,7 @@ class MultiplexConnection(object):
             self.connect(hostslist, port, timeout, sample)
     def connect(self, hostslist, port, timeout, sample):
         for i, hosts in enumerate(hostslist):
-            hosts = random_sample(hosts, sample)
+            hosts = random.sample(hosts, sample)
             logging.debug('MultiplexConnection connect (%s, %s)', hosts, port)
             socs = []
             for host in hosts:
@@ -153,7 +135,7 @@ class MultiplexConnection(object):
             raise RuntimeError(r'MultiplexConnection Cannot Connect to hostslist %s:%s' % (hostslist, port))
     def connect_proxy(self, hostslist, port, timeout, sample, (proxy_type, proxy_host, proxy_port, proxy_username, proxy_password)):
         for i, hosts in enumerate(hostslist):
-            hosts = random_sample(hosts, sample)
+            hosts = random.sample(hosts, sample)
             logging.debug('MultiplexConnection connect_proxy (%s, %s)', hosts, port)
             socs = []
             for host in hosts:
