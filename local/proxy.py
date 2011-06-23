@@ -16,16 +16,9 @@ import ssl
 import ctypes
 import threading, Queue
 try:
-    import OpenSSL.crypto
-    openssl_enabled = True
+    import OpenSSL
 except ImportError:
-    openssl_enabled = False
-
-try:
-    import xmpp
-    xmpp_enabled = True
-except ImportError:
-    xmpp_enabled = False
+    OpenSSL = None
 
 def random_choice(seq):
     return seq[int(ord(os.urandom(1))/256.0*len(seq))]
@@ -81,11 +74,6 @@ class Common(object):
         self.HTTPS_TIMEOUT   = self.config.getint('https', 'timeout')
         self.HTTPS_SAMPLE    = self.config.getint('https', 'sample')
 
-        #self.XMPP_SERVER     = self.config.get('xmpp', 'server')
-        #self.XMPP_PORT       = self.config.getint('xmpp', 'port')
-        #self.XMPP_USERNAME   = self.config.get('xmpp', 'username')
-        #self.XMPP_PASSWORD   = self.config.get('xmpp', 'password')
-
         self.HOSTS           = self.config.items('hosts')
         logging.basicConfig(level=getattr(logging, self.GAE_DEBUG), format='%(levelname)s - - %(asctime)s %(message)s', datefmt='[%d/%b/%Y %H:%M:%S]')
 
@@ -116,8 +104,7 @@ class Common(object):
     def info(self):
         info = ''
         info += '--------------------------------------------\n'
-        info += 'OpenSSL Module : %s\n' % {True:'Enabled', False:'Disabled'}[openssl_enabled]
-        info += 'XMPP Module    : %s\n' % {True:'Enabled', False:'Disabled'}[xmpp_enabled] if common.GAE_PREFER == 'xmpp' else ''
+        info += 'OpenSSL Module : %s\n' % 'Enabled' if OpenSSL else 'Disabled'
         info += 'Listen Address : %s:%d\n' % (self.GAE_IP, self.GAE_PORT)
         info += 'Log Level      : %s\n' % self.GAE_DEBUG
         info += 'Local Proxy    : %s://%s:%s\n' % (self.PROXY_TYPE, self.PROXY_HOST, self.PROXY_PORT) if self.PROXY_ENABLE else ''
@@ -341,7 +328,7 @@ class RootCA(object):
         crtFile = os.path.join(basedir, 'certs/%s.crt' % host)
         if os.path.exists(keyFile):
             return (keyFile, crtFile)
-        if not openssl_enabled:
+        if not OpenSSL:
             keyFile = os.path.join(basedir, 'CA.key')
             crtFile = os.path.join(basedir, 'CA.crt')
             return (keyFile, crtFile)
@@ -373,7 +360,7 @@ class RootCA(object):
         cacrtFile = os.path.join(os.path.dirname(__file__), 'CA.crt')
         cakey = RootCA.readFile(cakeyFile)
         cacrt = RootCA.readFile(cacrtFile)
-        if openssl_enabled:
+        if OpenSSL:
             RootCA.CA = (RootCA.loadPEM(cakey, 0), RootCA.loadPEM(cacrt, 2))
             for host in common.GAE_CERTS:
                 RootCA.getCertificate(host)
@@ -391,9 +378,7 @@ class GaeProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     fetchTimeout = 5
     FR_Headers = ('', 'host', 'vary', 'via', 'x-forwarded-for', 'proxy-authorization', 'proxy-connection', 'upgrade', 'keep-alive')
     opener = None
-    xmppclient = None
     opener_lock = threading.Lock()
-    xmppclient_lock = threading.Lock()
 
     def address_string(self):
         return '%s:%s' % self.client_address[:2]
@@ -436,20 +421,6 @@ class GaeProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                     self.opener.addheaders = []
         return self.opener
 
-    def _xmppclient(self):
-        '''double-checked locking xmppclient'''
-        if self.xmppclient is None:
-            with GaeProxyHandler.xmppclient_lock:
-                if self.xmppclient is None:
-                    logging.debug('GaeProxyHandler xmppclient connect %s:%s', common.XMPP_SERVER, common.XMPP_PORT)
-                    self.xmppclient = xmpp.Client(common.XMPP_SERVER, common.XMPP_PORT, [])
-                    self.xmppclient.connect((common.XMPP_SERVER, common.XMPP_PORT))
-                    logging.debug('GaeProxyHandler xmppclient connect %s:%s OK')
-                    logging.debug('GaeProxyHandler xmppclient auth %s:%s', common.XMPP_USERNAME, common.XMPP_PASSWORD)
-                    self.xmppclient.auth(common.XMPP_USERNAME, common.XMPP_PASSWORD)
-                    logging.debug('GaeProxyHandler xmppclient auth %s:%s OK')
-        return self.xmppclient
-
     def _fetch(self, url, method, headers, payload):
         errors = []
         params = {'url':url, 'method':method, 'headers':str(headers), 'payload':payload}
@@ -460,20 +431,13 @@ class GaeProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         for i in range(1, 4):
             try:
                 appid = common.select_appid(url)
-                if common.GAE_PREFER != 'xmpp':
-                    fetchserver = '%s://%s.appspot.com%s' % (common.GAE_PREFER, appid, common.GAE_PATH)
-                    logging.debug('GaeProxyHandler fetch %r from %r', url, fetchserver)
-                    request = urllib2.Request(fetchserver, zlib.compress(params, 9))
-                    request.add_header('Content-Type', 'application/octet-stream')
-                    response = self._opener().open(request)
-                    data = response.read()
-                    response.close()
-                else:
-                    xmppid = '%s@appspot.com' % appid
-                    self._xmppclient().send(xmpp.Message(xmppid, params))
-                    data = self._xmppclient().Connection.receive()
-                    logging.debug('GaeProxyHandler xmpp fetched data:%s', data)
-                    data = re.search('<body>(.+?)</body>', data).group(1)
+                fetchserver = '%s://%s.appspot.com%s' % (common.GAE_PREFER, appid, common.GAE_PATH)
+                logging.debug('GaeProxyHandler fetch %r from %r', url, fetchserver)
+                request = urllib2.Request(fetchserver, zlib.compress(params, 9))
+                request.add_header('Content-Type', 'application/octet-stream')
+                response = self._opener().open(request)
+                data = response.read()
+                response.close()
             except urllib2.HTTPError, e:
                 # www.google.cn:80 is down, switch to https
                 if e.code == 502 or e.code == 504:
