@@ -602,11 +602,14 @@ class GaeProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             logging.exception('GaeProxyHandler.do_CONNECT_Direct Error')
             self.send_error(502, 'GaeProxyHandler.do_CONNECT_Direct Error')
         finally:
-            for conn in [self.connection, soc]:
-                try:
-                    conn.close()
-                except:
-                    pass
+            try:
+                self.connection.close()
+            except:
+                pass
+            try:
+                soc.close()
+            except:
+                pass
 
     def do_CONNECT_Forward(self):
         # for ssl proxy
@@ -723,11 +726,14 @@ class GaeProxyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             logging.exception('SimpleProxyHandler.do_GET Error, %s', ex)
             self.send_error(502, 'SimpleProxyHandler.do_GET Error (%s)' % ex)
         finally:
-            for conn in [self.connection, soc]:
-                try:
-                    conn.close()
-                except:
-                    pass
+            try:
+                self.connection.close()
+            except:
+                pass
+            try:
+                soc.close()
+            except:
+                pass
 
     def do_METHOD_Forward(self):
         if self.path.startswith('/'):
