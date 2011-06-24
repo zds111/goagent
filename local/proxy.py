@@ -110,7 +110,8 @@ class MultiplexConnection(object):
             self.connect(hostslist, port, timeout, sample)
     def connect(self, hostslist, port, timeout, sample):
         for i, hosts in enumerate(hostslist):
-            hosts = random.sample(hosts, sample)
+            if len(hosts) > sample:
+                hosts = random.sample(hosts, sample)
             logging.debug('MultiplexConnection connect (%s, %s)', hosts, port)
             socs = []
             for host in hosts:
@@ -135,7 +136,8 @@ class MultiplexConnection(object):
             raise RuntimeError(r'MultiplexConnection Cannot Connect to hostslist %s:%s' % (hostslist, port))
     def connect_proxy(self, hostslist, port, timeout, sample, (proxy_type, proxy_host, proxy_port, proxy_username, proxy_password)):
         for i, hosts in enumerate(hostslist):
-            hosts = random.sample(hosts, sample)
+            if len(hosts) > sample:
+                hosts = random.sample(hosts, sample)
             logging.debug('MultiplexConnection connect_proxy (%s, %s)', hosts, port)
             socs = []
             for host in hosts:
